@@ -1,11 +1,14 @@
 import torch
 from torchvision import transforms
-
+import pathlib
 
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-EPOCHS = 10
+EPOCHS = 200
 BATCH_SIZE = 8
 LEARNING_RATE = 1e-5
+MODELS_PATH = pathlib.Path('saved_models')
+if not MODELS_PATH.exists():
+    MODELS_PATH.mkdir()
 
 # fmt: off
 CHARS = [
@@ -17,6 +20,7 @@ CHARS = [
 # fmt: on
 
 CHARS_DICT = {char: i for i, char in enumerate(CHARS)}
+BLANK_SIGN = '-'
 
 # TODO: Calculate mean and std of all images
 transforms_train = transforms.Compose(
