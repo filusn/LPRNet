@@ -8,8 +8,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import config
+import wandb
 from dataset import LicensePlateDataset
-from model import LPRNet
+from model import LPRNetEU
 
 
 def sparse_tuple_for_ctc(T_length, lengths):
@@ -35,7 +36,7 @@ def train_epoch(model, loader, opt, loss_fn):
             lengths.to(config.DEVICE),
         )
 
-        input_lengths, target_lengths = sparse_tuple_for_ctc(18, lengths)
+        input_lengths, target_lengths = sparse_tuple_for_ctc(30, lengths)
 
         logits = model(imgs)
         log_probs = logits.permute(2, 0, 1)
@@ -45,8 +46,7 @@ def train_epoch(model, loader, opt, loss_fn):
         loss = loss_fn(
             log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths
         )
-        # if loss == torch.inf:
-        #     continue
+
         loss.backward()
         opt.step()
 
@@ -62,7 +62,6 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
     loss = 0
     true_pos = 0
     levenshtein_dist = 0
-    num_infs = 0
 
     for idx, (imgs, labels, lengths) in enumerate(loop):
         imgs, labels, lengths = (
@@ -75,7 +74,7 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
             logits = model(imgs)
 
             # Calculation of loss
-            input_lengths, target_lengths = sparse_tuple_for_ctc(16, lengths)
+            input_lengths, target_lengths = sparse_tuple_for_ctc(30, lengths)
             log_probs = logits.permute(2, 0, 1)
             log_probs = log_probs.log_softmax(2)
 
@@ -83,10 +82,7 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
                 log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths
             )
 
-            if not batch_loss == torch.inf:
-                loss += batch_loss.item()
-            else:
-                num_infs += 1
+            loss += batch_loss.item()
 
             # Calculation of accuracy
             logits = torch.argmax(logits, axis=1)
@@ -111,7 +107,6 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
 
     mean_loss = loss / len(loader.dataset)
     accuracy = true_pos / len(loader.dataset) * 100
-    print(len(loader), true_pos, num_infs)
     mean_levenshtein = (
         round(levenshtein_dist / len(loader.dataset), 2) if levenshtein else 'not calculated'
     )
@@ -120,29 +115,47 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
         f'[INFO] Evaluation mean loss / accuracy / mean Levenshtein distance -> {mean_loss:.2f} / {accuracy:.2f} / {mean_levenshtein}'
     )
 
+    wandb.log({'loss': loss, 'accuracy': accuracy, 'mean_levenshtein': mean_levenshtein})
+
+    return loss, mean_loss, accuracy, mean_levenshtein
+
 
 def train():
-    train_dataset = LicensePlateDataset('data')
+    # torch.autograd.set_detect_anomaly(True)
+    train_dataset = LicensePlateDataset('generated_dataset/train')
     train_dataloader = DataLoader(train_dataset, config.BATCH_SIZE, shuffle=True)
 
-    lprnet = LPRNet(len(config.CHARS)).to(config.DEVICE)
+    test_dataset = LicensePlateDataset('generated_dataset/test')
+    test_dataloader = DataLoader(test_dataset, config.BATCH_SIZE, shuffle=False)
+
+    lprnet = LPRNetEU(len(config.CHARS)).to(config.DEVICE)
     # lprnet.load_state_dict(torch.load(config.MODELS_PATH / 'lprnet_50.pth'))
 
     opt = optim.RMSprop(lprnet.parameters(), lr=config.LEARNING_RATE)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt)
     ctc_loss = nn.CTCLoss(blank=len(config.CHARS) - 1, reduction='mean')
 
     for epoch in range(config.EPOCHS):
         print(f'Epoch {epoch + 1}/{config.EPOCHS}')
         train_epoch(lprnet, train_dataloader, opt, ctc_loss)
-        if (epoch + 1) % 10 == 0:
-            evaluate(lprnet, train_dataloader, ctc_loss, levenshtein=True)
+        # if (epoch + 1) % 10 == 0:
+        val_loss, _, _, _ = evaluate(lprnet, test_dataloader, ctc_loss, levenshtein=True)
+        scheduler.step(val_loss)
 
         if (epoch + 1) % 50 == 0:
             torch.save(lprnet.state_dict(), config.MODELS_PATH / f'lprnet_{epoch + 1}.pth')
 
     # lprnet.load_state_dict(torch.load(config.MODELS_PATH / 'lprnet_50.pth'))
-    # evaluate(lprnet, train_dataloader, ctc_loss, levenshtein=True)
+    # mean_loss, accuracy, mean_levenshtein = evaluate(
+    #     lprnet, train_dataloader, ctc_loss, levenshtein=True
+    # )
 
 
 if __name__ == '__main__':
+    wandb.init(project='my-test-project')
+    wandb.config = {
+        'learning_rate': config.LEARNING_RATE,
+        'epochs': config.EPOCHS,
+        'batch_size': config.BATCH_SIZE,
+    }
     train()
