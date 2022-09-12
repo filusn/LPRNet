@@ -1,11 +1,16 @@
+import os
+import pathlib
+import random
+
 import torch
 from torchvision import transforms
-import pathlib
 
+
+SEED = 10
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-EPOCHS = 200
-BATCH_SIZE = 8
-LEARNING_RATE = 1e-5
+EPOCHS = 300
+BATCH_SIZE = 16
+LEARNING_RATE = 1e-3
 MODELS_PATH = pathlib.Path('saved_models')
 if not MODELS_PATH.exists():
     MODELS_PATH.mkdir()
@@ -29,3 +34,16 @@ transforms_train = transforms.Compose(
         # transforms.Normalize()
     ]
 )
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    # np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = True
+
+
+seed_everything(SEED)
