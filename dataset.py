@@ -20,7 +20,7 @@ class LicensePlateDataset(Dataset):
 
     def __getitem__(self, index):
         img = Image.open(self.imgs[index])
-        img = img.resize((94, 24))
+        img = img.resize((128, 28))
         img = ToTensor()(img)
         mean, std = img.mean([1, 2]), img.std([1, 2])
         img = Normalize(mean, std)(img)
@@ -29,15 +29,13 @@ class LicensePlateDataset(Dataset):
         label = label.upper()
         label = ''.join(ch for ch in label if ch.isalnum())
 
-        while len(label) < 9:
-            splitted = False
-            for i in range(len(label) - 1):
-                if label[i] == label[i + 1]:
-                    label = label[: i + 1] + '-' + label[i + 1 :]
-                    splitted = True
-                    break
-            if not splitted:
-                label += '-'
+        # TODO: Move to the collate_fn with torch padding
+        for i in range(len(label) - 1):
+            if label[i] == label[i + 1]:
+                label = label[: i + 1] + '-' + label[i + 1 :]
+
+        while len(label) < 16:
+            label += '-'
         label = [config.CHARS_DICT[char] for char in label]
         label = torch.tensor(label)
 
