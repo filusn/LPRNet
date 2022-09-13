@@ -21,6 +21,7 @@ class LicensePlateDataset(Dataset):
     def __getitem__(self, index):
         img = Image.open(self.imgs[index])
         img = img.resize((128, 28))
+        # img = img.resize((94, 24))
         img = ToTensor()(img)
         mean, std = img.mean([1, 2]), img.std([1, 2])
         img = Normalize(mean, std)(img)
@@ -42,6 +43,20 @@ class LicensePlateDataset(Dataset):
         return img, label, len(label)
 
 
+# def collate_fn(batch):
+#     imgs = []
+#     labels = []
+#     lengths = []
+#     for _, sample in enumerate(batch):
+#         img, label, length = sample
+#         imgs.append(torch.from_numpy(img))
+#         labels.extend(label)
+#         lengths.append(length)
+#     labels = np.asarray(labels).flatten().astype(np.int)
+
+#     return (torch.stack(imgs, 0), torch.from_numpy(labels), lengths)
+
+
 if __name__ == '__main__':
     lpd = LicensePlateDataset('data')
     img, label, length = next(iter(lpd))
@@ -53,5 +68,8 @@ if __name__ == '__main__':
     print(len(lpd))
     from torch.utils.data import DataLoader
 
-    dl = DataLoader(lpd)
+    dl = DataLoader(lpd, batch_size=2)
     print(len(dl))
+    for sample in dl:
+        print(sample)
+        break

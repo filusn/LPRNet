@@ -3,6 +3,34 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class LayerNorm(nn.Module):
+    r"""LayerNorm that supports two data formats: channels_last (default) or channels_first.
+    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with
+    shape (batch_size, height, width, channels) while channels_first corresponds to inputs
+    with shape (batch_size, channels, height, width).
+    """
+
+    def __init__(self, normalized_shape, eps=1e-6, data_format="channels_last"):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(normalized_shape))
+        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+        self.eps = eps
+        self.data_format = data_format
+        if self.data_format not in ["channels_last", "channels_first"]:
+            raise NotImplementedError
+        self.normalized_shape = (normalized_shape,)
+
+    def forward(self, x):
+        if self.data_format == "channels_last":
+            return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        elif self.data_format == "channels_first":
+            u = x.mean(1, keepdim=True)
+            s = (x - u).pow(2).mean(1, keepdim=True)
+            x = (x - u) / torch.sqrt(s + self.eps)
+            x = self.weight[:, None, None] * x + self.bias[:, None, None]
+            return x
+
+
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -14,14 +42,26 @@ class BasicBlock(nn.Module):
         for conv in [conv1, conv2, conv3, conv4]:
             self.convs.append(conv)
 
-        self.norm = nn.BatchNorm2d(out_channels)
+        # self.norm = nn.BatchNorm2d(out_channels)
+        self.norm = LayerNorm(out_channels, eps=1e-6, data_format='channels_first')
+        # print(conv4)
+        self.gamma = nn.Parameter(1e-4 * torch.ones((out_channels)), requires_grad=True)
+        # print(self.gamma.size())
 
     def forward(self, x):
         for i in range(4):
+            # print(x.size())
             x = self.convs[i](x)
+            # print(x.size())
             if i == 3:
                 x = self.norm(x)
-            x = F.relu(x)
+            # x = F.relu(x)
+            x = F.gelu(x)
+            # print(x.size())
+        # print(x.size())
+        x = x.permute(0, 2, 3, 1)
+        x = self.gamma * x
+        x = x.permute(0, 3, 1, 2)
         return x
 
 
@@ -84,8 +124,10 @@ class LPRNetEU(nn.Module):
 
         self.block1 = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, stride=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
+            # nn.BatchNorm2d(64),
+            LayerNorm(64, eps=1e-6, data_format='channels_first'),
+            nn.GELU(),
+            # nn.ReLU()
         )
         self.block2 = nn.Sequential(
             nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 1, 1)), BasicBlock(64, 128)
@@ -99,14 +141,20 @@ class LPRNetEU(nn.Module):
             nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(4, 1, 2)),
             nn.Dropout(0.5),
             nn.Conv2d(64, 256, kernel_size=(1, 4)),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
+            # nn.BatchNorm2d(256),
+            LayerNorm(256, eps=1e-6, data_format='channels_first'),
+            # nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(0.5),
             nn.Conv2d(256, num_classes, kernel_size=(13, 1), padding=(0, 2)),
-            nn.BatchNorm2d(num_classes),
-            nn.ReLU(),
+            # nn.BatchNorm2d(num_classes),
+            LayerNorm(num_classes, eps=1e-6, data_format='channels_first'),
+            # nn.ReLU(),
+            nn.GELU(),
         )
         self.last_conv = nn.Conv2d(448 + num_classes, num_classes, kernel_size=1)
+
+        self.apply(self._init_weights)
 
     def forward(self, x):
         x1 = self.block1(x)
@@ -129,3 +177,8 @@ class LPRNetEU(nn.Module):
         logits = torch.mean(x, dim=2)
 
         return logits
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Conv2d):
+            nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
+            module.bias.data.fill_(0.01)

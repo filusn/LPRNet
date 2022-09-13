@@ -11,6 +11,22 @@ import config
 import wandb
 from dataset import LicensePlateDataset
 from model import LPRNetEU
+import numpy as np
+
+
+def collate_fn(batch):
+    imgs = []
+    labels = []
+    lengths = []
+    for _, sample in enumerate(batch):
+        img, label, length = sample
+        # imgs.append(torch.from_numpy(img))
+        imgs.append(img)
+        labels.extend(label)
+        lengths.append(length)
+    labels = np.asarray(labels).flatten().astype(np.int)
+
+    return (torch.stack(imgs, 0), torch.from_numpy(labels), torch.from_numpy(np.array(lengths)))
 
 
 def sparse_tuple_for_ctc(T_length, lengths):
@@ -39,9 +55,12 @@ def train_epoch(model, loader, opt, loss_fn):
         input_lengths, target_lengths = sparse_tuple_for_ctc(30, lengths)
 
         logits = model(imgs)
+        # print(logits.size())
         log_probs = logits.permute(2, 0, 1)
+        # print(log_probs.size())
         log_probs = log_probs.log_softmax(2).requires_grad_()
-
+        # print(log_probs.size())
+        # print(labels.size())
         opt.zero_grad()
         loss = loss_fn(
             log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths
@@ -93,9 +112,13 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
                 # Remove consecutive duplicates
                 encoded_pred = [key for key, _ in groupby(encoded_pred)]
                 # Remove blank characters
-                encoded_pred = [ch for ch in encoded_pred if ch != len(config.CHARS) - 1]
-                encoded_label = [ch for ch in encoded_label if ch != len(config.CHARS) - 1]
-
+                encoded_pred = [
+                    ch for ch in encoded_pred if ch != config.CHARS.index(config.BLANK_SIGN)
+                ]  # len(config.CHARS) - 1]
+                encoded_label = [
+                    ch for ch in encoded_label if ch != config.CHARS.index(config.BLANK_SIGN)
+                ]  # len(config.CHARS) - 1]
+                # print(encoded_pred, encoded_label)
                 if encoded_pred == encoded_label:
                     true_pos += 1
 
@@ -112,7 +135,7 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
     )
 
     print(
-        f'[INFO] Evaluation mean loss / accuracy / mean Levenshtein distance -> {mean_loss:.2f} / {accuracy:.2f} / {mean_levenshtein}'
+        f'[INFO] Evaluation loss / mean loss / accuracy / mean Levenshtein distance -> {loss:2f} / {mean_loss:.5f} / {accuracy:.4f} / {mean_levenshtein}'
     )
 
     wandb.log({'loss': loss, 'accuracy': accuracy, 'mean_levenshtein': mean_levenshtein})
@@ -133,20 +156,22 @@ def train():
 
     opt = optim.RMSprop(lprnet.parameters(), lr=config.LEARNING_RATE)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt)
-    ctc_loss = nn.CTCLoss(blank=len(config.CHARS) - 1, reduction='mean')
+    ctc_loss = nn.CTCLoss(blank=config.CHARS.index(config.BLANK_SIGN), reduction='mean')
 
     for epoch in range(config.EPOCHS):
         print(f'Epoch {epoch + 1}/{config.EPOCHS}')
         train_epoch(lprnet, train_dataloader, opt, ctc_loss)
         # if (epoch + 1) % 10 == 0:
-        val_loss, _, _, _ = evaluate(lprnet, test_dataloader, ctc_loss, levenshtein=True)
-        scheduler.step(val_loss)
+        val_loss, val_mean_loss, _, _ = evaluate(
+            lprnet, test_dataloader, ctc_loss, levenshtein=True
+        )
+        scheduler.step(val_mean_loss)
 
-        if (epoch + 1) % 50 == 0:
+        if (epoch + 1) % 10 == 0:
             torch.save(lprnet.state_dict(), config.MODELS_PATH / f'lprnet_{epoch + 1}.pth')
 
-    # lprnet.load_state_dict(torch.load(config.MODELS_PATH / 'lprnet_50.pth'))
-    # mean_loss, accuracy, mean_levenshtein = evaluate(
+    # lprnet.load_state_dict(torch.load(config.MODELS_PATH / 'lprnet_20.pth'))
+    # loss, mean_loss, accuracy, mean_levenshtein = evaluate(
     #     lprnet, train_dataloader, ctc_loss, levenshtein=True
     # )
 
