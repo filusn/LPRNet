@@ -26,7 +26,7 @@ CHARS = [
 
 CHARS_DICT = {char: i for i, char in enumerate(CHARS)}
 BLANK_SIGN = '-'
-SEQ_LEN = 16
+INPUT_LEN = 30
 
 # TODO: Calculate mean and std of all images
 transforms_train = transforms.Compose(
