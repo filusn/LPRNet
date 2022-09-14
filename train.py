@@ -37,7 +37,10 @@ def sparse_tuple_for_ctc(T_length, lengths):
         input_lengths.append(T_length)
         target_lengths.append(ch)
 
-    return tuple(input_lengths), tuple(target_lengths)
+    input_lengths = torch.ones((len(lengths)), dtype=torch.int8) * config.INPUT_LEN
+    target_lengths = lengths
+    # return tuple(input_lengths), tuple(target_lengths)
+    return input_lengths, target_lengths
 
 
 def train_epoch(model, loader, opt, loss_fn):
@@ -52,7 +55,10 @@ def train_epoch(model, loader, opt, loss_fn):
             lengths.to(config.DEVICE),
         )
 
-        input_lengths, target_lengths = sparse_tuple_for_ctc(30, lengths)
+        # input_lengths, target_lengths = sparse_tuple_for_ctc(config.INPUT_LEN, lengths)
+        input_lengths = torch.ones((len(lengths)), dtype=torch.int8) * config.INPUT_LEN
+
+        # break
 
         logits = model(imgs)
         # print(logits.size())
@@ -62,9 +68,7 @@ def train_epoch(model, loader, opt, loss_fn):
         # print(log_probs.size())
         # print(labels.size())
         opt.zero_grad()
-        loss = loss_fn(
-            log_probs, labels, input_lengths=input_lengths, target_lengths=target_lengths
-        )
+        loss = loss_fn(log_probs, labels, input_lengths=input_lengths, target_lengths=lengths)
 
         loss.backward()
         opt.step()
