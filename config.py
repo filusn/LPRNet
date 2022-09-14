@@ -8,7 +8,7 @@ from torchvision import transforms
 
 SEED = 10
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-EPOCHS = 20
+EPOCHS = 100
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
 MODELS_PATH = pathlib.Path('saved_models')
@@ -26,6 +26,7 @@ CHARS = [
 
 CHARS_DICT = {char: i for i, char in enumerate(CHARS)}
 BLANK_SIGN = '-'
+SEQ_LEN = 16
 
 # TODO: Calculate mean and std of all images
 transforms_train = transforms.Compose(

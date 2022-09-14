@@ -118,7 +118,8 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
                 encoded_label = [
                     ch for ch in encoded_label if ch != config.CHARS.index(config.BLANK_SIGN)
                 ]  # len(config.CHARS) - 1]
-                # print(encoded_pred, encoded_label)
+                # print('\n', encoded_pred, encoded_label, len(logits), lengths[0])
+                # break
                 if encoded_pred == encoded_label:
                     true_pos += 1
 
@@ -127,6 +128,7 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
                     decoded_pred = ''.join([config.CHARS[ch] for ch in encoded_pred])
                     decoded_label = ''.join([config.CHARS[ch] for ch in encoded_label])
                     levenshtein_dist += distance(decoded_pred, decoded_label)
+        # break
 
     mean_loss = loss / len(loader.dataset)
     accuracy = true_pos / len(loader.dataset) * 100
@@ -138,17 +140,19 @@ def evaluate(model, loader, loss_fn, levenshtein=False):
         f'[INFO] Evaluation loss / mean loss / accuracy / mean Levenshtein distance -> {loss:2f} / {mean_loss:.5f} / {accuracy:.4f} / {mean_levenshtein}'
     )
 
-    wandb.log({'loss': loss, 'accuracy': accuracy, 'mean_levenshtein': mean_levenshtein})
+    # wandb.log({'loss': loss, 'accuracy': accuracy, 'mean_levenshtein': mean_levenshtein})
 
     return loss, mean_loss, accuracy, mean_levenshtein
 
 
 def train():
     # torch.autograd.set_detect_anomaly(True)
-    train_dataset = LicensePlateDataset('generated_dataset/train')
+    # train_dataset = LicensePlateDataset('generated_dataset/train')
+    train_dataset = LicensePlateDataset('data3')
     train_dataloader = DataLoader(train_dataset, config.BATCH_SIZE, shuffle=True)
 
-    test_dataset = LicensePlateDataset('generated_dataset/test')
+    # test_dataset = LicensePlateDataset('generated_dataset/test')
+    test_dataset = LicensePlateDataset('data3')
     test_dataloader = DataLoader(test_dataset, config.BATCH_SIZE, shuffle=False)
 
     lprnet = LPRNetEU(len(config.CHARS)).to(config.DEVICE)
@@ -170,17 +174,17 @@ def train():
         if (epoch + 1) % 10 == 0:
             torch.save(lprnet.state_dict(), config.MODELS_PATH / f'lprnet_{epoch + 1}.pth')
 
-    # lprnet.load_state_dict(torch.load(config.MODELS_PATH / 'lprnet_20.pth'))
+    # lprnet.load_state_dict(torch.load(config.MODELS_PATH / 'lprnet_100.pth'))
     # loss, mean_loss, accuracy, mean_levenshtein = evaluate(
     #     lprnet, train_dataloader, ctc_loss, levenshtein=True
     # )
 
 
 if __name__ == '__main__':
-    wandb.init(project='my-test-project')
-    wandb.config = {
-        'learning_rate': config.LEARNING_RATE,
-        'epochs': config.EPOCHS,
-        'batch_size': config.BATCH_SIZE,
-    }
+    # wandb.init(project='my-test-project')
+    # wandb.config = {
+    #     'learning_rate': config.LEARNING_RATE,
+    #     'epochs': config.EPOCHS,
+    #     'batch_size': config.BATCH_SIZE,
+    # }
     train()

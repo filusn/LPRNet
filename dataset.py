@@ -29,18 +29,18 @@ class LicensePlateDataset(Dataset):
         label = self.imgs[index].stem.split('_')[0]
         label = label.upper()
         label = ''.join(ch for ch in label if ch.isalnum())
-
+        length = len(label)
         # TODO: Move to the collate_fn with torch padding
-        for i in range(len(label) - 1):
-            if label[i] == label[i + 1]:
-                label = label[: i + 1] + '-' + label[i + 1 :]
+        # for i in range(len(label) - 1):
+        #     if label[i] == label[i + 1]:
+        #         label = label[: i + 1] + '-' + label[i + 1 :]
 
-        while len(label) < 16:
+        while len(label) < config.SEQ_LEN:
             label += '-'
         label = [config.CHARS_DICT[char] for char in label]
         label = torch.tensor(label)
 
-        return img, label, len(label)
+        return img, label, length
 
 
 # def collate_fn(batch):
@@ -58,7 +58,7 @@ class LicensePlateDataset(Dataset):
 
 
 if __name__ == '__main__':
-    lpd = LicensePlateDataset('data')
+    lpd = LicensePlateDataset('data2')
     img, label, length = next(iter(lpd))
     print(img.size())
     print(img.mean())
@@ -66,10 +66,10 @@ if __name__ == '__main__':
     print(label)
     print(length)
     print(len(lpd))
-    from torch.utils.data import DataLoader
+    # from torch.utils.data import DataLoader
 
-    dl = DataLoader(lpd, batch_size=2)
-    print(len(dl))
-    for sample in dl:
-        print(sample)
-        break
+    # dl = DataLoader(lpd, batch_size=2)
+    # print(len(dl))
+    # for sample in dl:
+    #     print(sample)
+    #     break
