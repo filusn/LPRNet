@@ -35,7 +35,7 @@ class LicensePlateDataset(Dataset):
         #     if label[i] == label[i + 1]:
         #         label = label[: i + 1] + '-' + label[i + 1 :]
 
-        while len(label) < config.SEQ_LEN:
+        while len(label) < config.INPUT_LEN:
             label += '-'
         label = [config.CHARS_DICT[char] for char in label]
         label = torch.tensor(label)
