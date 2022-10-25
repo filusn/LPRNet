@@ -6,6 +6,11 @@ import numpy as np
 import torch
 from torchvision import transforms
 
+DEBUG = False
+
+if DEBUG:
+    torch.autograd.set_detect_anomaly(True)
+
 TRAIN_DATASET = ''
 VAL_DATASET = ''
 TEST_DATASET = ''
