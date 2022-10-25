@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# Faster implementation of layer normalization from Meta Research
+# ConvNeXt: https://github.com/facebookresearch/ConvNeXt
+
+
 class LayerNorm(nn.Module):
     r"""LayerNorm that supports two data formats: channels_last (default) or channels_first.
     The ordering of the dimensions in the inputs. channels_last corresponds to inputs with
@@ -42,23 +46,15 @@ class BasicBlock(nn.Module):
         for conv in [conv1, conv2, conv3, conv4]:
             self.convs.append(conv)
 
-        # self.norm = nn.BatchNorm2d(out_channels)
         self.norm = LayerNorm(out_channels, eps=1e-6, data_format='channels_first')
-        # print(conv4)
         self.gamma = nn.Parameter(1e-4 * torch.ones((out_channels)), requires_grad=True)
-        # print(self.gamma.size())
 
     def forward(self, x):
         for i in range(4):
-            # print(x.size())
             x = self.convs[i](x)
-            # print(x.size())
             if i == 3:
                 x = self.norm(x)
-            # x = F.relu(x)
             x = F.gelu(x)
-            # print(x.size())
-        # print(x.size())
         x = x.permute(0, 2, 3, 1)
         x = self.gamma * x
         x = x.permute(0, 3, 1, 2)
@@ -66,6 +62,10 @@ class BasicBlock(nn.Module):
 
 
 class LPRNetChina(nn.Module):
+    """Net following original implementation of LPRNet (https://arxiv.org/abs/1806.10447)
+    for Chinese license plates recognition.
+    """
+
     def __init__(self, num_classes):
         super().__init__()
 
@@ -119,15 +119,18 @@ class LPRNetChina(nn.Module):
 
 
 class LPRNetEU(nn.Module):
+    """Implementation of LPRNet (https://arxiv.org/abs/1806.10447)
+    modified for the EU license plates aspect ratio
+    and improved with good practices of modern neural networks.
+    """
+
     def __init__(self, num_classes):
         super().__init__()
 
         self.block1 = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, stride=1),
-            # nn.BatchNorm2d(64),
             LayerNorm(64, eps=1e-6, data_format='channels_first'),
             nn.GELU(),
-            # nn.ReLU()
         )
         self.block2 = nn.Sequential(
             nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 1, 1)), BasicBlock(64, 128)
@@ -141,15 +144,11 @@ class LPRNetEU(nn.Module):
             nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(4, 1, 2)),
             nn.Dropout(0.5),
             nn.Conv2d(64, 256, kernel_size=(1, 4)),
-            # nn.BatchNorm2d(256),
             LayerNorm(256, eps=1e-6, data_format='channels_first'),
-            # nn.ReLU(),
             nn.GELU(),
             nn.Dropout(0.5),
             nn.Conv2d(256, num_classes, kernel_size=(13, 1), padding=(0, 2)),
-            # nn.BatchNorm2d(num_classes),
             LayerNorm(num_classes, eps=1e-6, data_format='channels_first'),
-            # nn.ReLU(),
             nn.GELU(),
         )
         self.last_conv = nn.Conv2d(448 + num_classes, num_classes, kernel_size=1)
